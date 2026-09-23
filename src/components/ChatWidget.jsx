@@ -1,68 +1,54 @@
 import { useEffect, useRef, useState } from 'react'
 import { getWhatsAppLink } from './WhatsAppButton.jsx'
+import { quickQuestions, matchRule, matchById } from '../data/chatRules.js'
 
 const WELCOME_MESSAGE = {
   role: 'assistant',
   content:
-    "Hello! I'm the Lins Kente Collections assistant. Ask me about our Kente styles, fabrics, or how to reach the shop in Tanoso, Techiman.",
+    "Hello! I'm the Lins Kente Collections assistant. Tap a question below, or type your own — for anything I can't answer, I'll connect you straight to WhatsApp.",
 }
 
-const SUGGESTIONS = [
-  'What Kente styles do you have?',
-  'Where is the shop located?',
-  'How do I place an order?',
-]
+const THINKING_DELAY_MS = 450 // small pause so replies don't feel instant/robotic
 
 export default function ChatWidget() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([WELCOME_MESSAGE])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
+  const [thinking, setThinking] = useState(false)
+  const [askedCount, setAskedCount] = useState(0)
   const scrollRef = useRef(null)
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages, loading, open])
+  }, [messages, thinking, open])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
 
-  const send = async (text) => {
-    const content = text.trim()
-    if (!content || loading) return
+  const reply = (userText, answer) => {
+    setMessages((prev) => [...prev, { role: 'user', content: userText }])
+    setThinking(true)
+    setAskedCount((c) => c + 1)
+    window.setTimeout(() => {
+      setMessages((prev) => [...prev, { role: 'assistant', content: answer }])
+      setThinking(false)
+    }, THINKING_DELAY_MS)
+  }
 
-    const nextMessages = [...messages, { role: 'user', content }]
-    setMessages(nextMessages)
-    setInput('')
-    setLoading(true)
-    setError(false)
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextMessages }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) throw new Error(data?.error || 'Request failed')
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
+  const handleQuickQuestion = (q) => {
+    reply(q.label, matchById(q.id))
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    send(input)
+    const text = input.trim()
+    if (!text || thinking) return
+    reply(text, matchRule(text))
+    setInput('')
   }
 
   return (
@@ -98,7 +84,7 @@ export default function ChatWidget() {
         <div className="flex items-center justify-between rounded-t-2xl bg-ink px-5 py-4 text-cream">
           <div>
             <p className="font-display text-base font-semibold">Lins Kente Assistant</p>
-            <p className="text-xs text-cream/60">Usually replies in a moment</p>
+            <p className="text-xs text-cream/60">Quick answers &middot; instant replies</p>
           </div>
           <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="text-xl leading-none sm:hidden">
             &times;
@@ -120,7 +106,7 @@ export default function ChatWidget() {
             </div>
           ))}
 
-          {loading && (
+          {thinking && (
             <div className="flex justify-start">
               <div className="flex items-center gap-1 rounded-2xl rounded-bl-sm bg-ink/5 px-4 py-3">
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink/40 [animation-delay:-0.3s]" />
@@ -130,28 +116,33 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {error && (
-            <div className="rounded-xl border border-rust/30 bg-rust/5 p-3 text-sm text-ink/80">
-              Sorry, the assistant couldn&rsquo;t respond just now. You can reach us directly on{' '}
-              <a href={getWhatsAppLink()} target="_blank" rel="noopener noreferrer" className="link-underline font-semibold text-forest">
-                WhatsApp
-              </a>{' '}
-              instead.
+          {!thinking && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {quickQuestions.map((q) => (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => handleQuickQuestion(q)}
+                  className="rounded-full border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink/70 hover:border-ink/30 hover:text-ink"
+                >
+                  {q.label}
+                </button>
+              ))}
             </div>
           )}
 
-          {messages.length === 1 && !loading && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => send(s)}
-                  className="rounded-full border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink/70 hover:border-ink/30 hover:text-ink"
-                >
-                  {s}
-                </button>
-              ))}
+          {askedCount >= 2 && !thinking && (
+            <div className="rounded-xl border border-forest/25 bg-forest/5 p-3 text-sm text-ink/80">
+              Still have questions?{' '}
+              <a
+                href={getWhatsAppLink()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-underline font-semibold text-forest"
+              >
+                Continue on WhatsApp
+              </a>{' '}
+              for a real, personal answer.
             </div>
           )}
         </div>
@@ -166,7 +157,7 @@ export default function ChatWidget() {
           />
           <button
             type="submit"
-            disabled={loading || !input.trim()}
+            disabled={thinking || !input.trim()}
             aria-label="Send message"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-cream transition-opacity disabled:opacity-40"
           >

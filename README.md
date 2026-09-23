@@ -20,40 +20,26 @@ npm run build
 
 This outputs a static site to `dist/`, ready to deploy.
 
-## AI chat agent
+## Chat widget
 
-The site includes a chat widget (bottom-right, every page) backed by a Vercel serverless
-function at `api/chat.js`, which calls the Claude API server-side so your API key is never
-exposed to visitors.
+The site includes a chat widget (bottom-right, every page) at
+`src/components/ChatWidget.jsx`. It's **rule-based, not AI** — no API key, no backend, no
+ongoing cost:
 
-**Setup:**
+- Tapping a suggested question, or typing something that matches a known topic (styles,
+  location, ordering, fabric, price, hours, contact), gets an instant canned answer.
+- Anything it doesn't recognize gets an honest "I don't have a confirmed answer for that" reply.
+- After two exchanges, it surfaces a "Continue on WhatsApp" prompt so real questions reach a
+  real person.
 
-1. Get an API key from [console.anthropic.com](https://console.anthropic.com).
-2. In your Vercel project settings, add an environment variable:
-   - Name: `ANTHROPIC_API_KEY`
-   - Value: your key
-3. Deploy (or redeploy). The widget will start working automatically — no frontend changes
-   needed.
+**To edit the answers:** open `src/data/chatRules.js`. Each entry has a list of trigger
+`keywords` and an `answer` string — add new topics or adjust wording there. Add or remove the
+buttons shown at the start of a chat in the `quickQuestions` array in the same file.
 
-**Local testing:** `npm run dev` (plain Vite) does not run the `/api` function, so the chat
-widget will show its "couldn't respond, try WhatsApp" fallback locally. To test the real chat
-agent before deploying:
-
-```bash
-npm install -g vercel   # one-time
-cp .env.example .env    # then fill in your real key
-vercel dev
-```
-
-**What the assistant knows:** only what's in `api/chat.js`'s system prompt — the business name,
-location, phone/WhatsApp number, and the kinds of products sold. It's instructed not to invent
-prices, stock, specifications, or hours, and to direct real purchase questions to WhatsApp. Edit
-the `SYSTEM_PROMPT` constant in `api/chat.js` to add real details (hours, more product info) as
-you confirm them.
-
-**Cost:** each message is a small API call (Claude Sonnet 5, capped at 500 output tokens, with
-history trimmed to the last 12 messages). Keep an eye on usage in the Anthropic Console,
-especially once the site gets real traffic.
+Because this is plain client-side matching, none of it needs Vercel functions, environment
+variables, or a paid API key — if you'd like a true AI-powered version later (one that can hold
+a real conversation), that's a separate build using something like a Vercel serverless function
+calling the Claude API, and it does require an Anthropic API key.
 
 ## Deploying
 
